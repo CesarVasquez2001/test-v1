@@ -1,13 +1,240 @@
 import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import {
+  CropperPosition,
+  Dimensions,
+  ImageCroppedEvent,
+  ImageCropperComponent,
+  ImageTransform,
+} from 'ngx-image-cropper';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-root',
-  standalone: true,
-  imports: [RouterOutlet],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.css'
+  styleUrls: ['./app.component.scss'],
+  standalone: true,
+  imports: [CommonModule, FormsModule, ImageCropperComponent],
 })
 export class AppComponent {
-  title = 'test-v1';
+  showCropper = false;
+  loading = false;
+  croppedImage: SafeUrl = '';
+  capturedImages: SafeUrl[] = [];
+
+  imageChangedEvent: Event | null = null;
+  imageURL?: string;
+  hidden = false;
+  disabled = false;
+  alignImage = 'center' as const;
+  roundCropper = false;
+  backgroundColor = 'red';
+  allowMoveImage = false;
+  hideResizeSquares = false;
+  canvasRotation = 0;
+  aspectRatio = 4 / 3;
+  containWithinAspectRatio = false;
+  maintainAspectRatio = false;
+  cropperStaticWidth = 0;
+  cropperStaticHeight = 0;
+  cropperMinWidth = 0;
+  cropperMinHeight = 0;
+  cropperMaxWidth = 0;
+  cropperMaxHeight = 0;
+  resetCropOnAspectRatioChange = true;
+  cropper?: CropperPosition;
+  transform: ImageTransform = {
+    translateUnit: 'px',
+    scale: 1,
+    rotate: 0,
+    flipH: false,
+    flipV: false,
+    translateH: 0,
+    translateV: 0,
+  };
+
+  timeout: any;
+  eventList = {};
+
+  constructor(private sanitizer: DomSanitizer) {}
+  capture() {
+    if (this.croppedImage) {
+      // Añade la imagen recortada al array de imágenes capturadas
+      this.capturedImages.push(this.croppedImage);
+      // Opcionalmente, puedes reiniciar la imagen recortada y ocultar el cropper
+      console.log(this.capturedImages);
+    } else {
+      console.error('No image to capture');
+    }
+  }
+  fileChangeEvent(event: Event): void {
+    this.loading = true;
+    this.imageChangedEvent = event;
+  }
+
+  imageCropped(event: ImageCroppedEvent) {
+    this.croppedImage = this.sanitizer.bypassSecurityTrustUrl(
+      event.objectUrl || event.base64 || ''
+    );
+    console.log('CROPPED', event);
+  }
+
+  imageLoaded() {
+    this.showCropper = true;
+    console.log('Image loaded');
+  }
+
+  cropperReady(sourceImageDimensions: Dimensions) {
+    console.log('Cropper ready', sourceImageDimensions);
+    this.loading = false;
+  }
+
+  loadImageFailed() {
+    console.error('Load image failed');
+  }
+
+  transformChange(transform: ImageTransform) {
+    console.log('transform changed', transform);
+  }
+
+  rotateLeft() {
+    this.loading = true;
+    setTimeout(() => {
+      // Use timeout because rotating image is a heavy operation and will block the ui thread
+      this.canvasRotation--;
+      this.flipAfterRotate();
+    });
+  }
+
+  rotateRight() {
+    this.loading = true;
+    setTimeout(() => {
+      this.canvasRotation++;
+      this.flipAfterRotate();
+    });
+  }
+
+  moveLeft() {
+    this.transform = {
+      ...this.transform,
+      translateH: this.transform.translateH! - 1,
+    };
+  }
+
+  moveRight() {
+    this.transform = {
+      ...this.transform,
+      translateH: this.transform.translateH! + 1,
+    };
+  }
+
+  moveDown() {
+    this.transform = {
+      ...this.transform,
+      translateV: this.transform.translateV! + 1,
+    };
+  }
+
+  moveUp() {
+    this.transform = {
+      ...this.transform,
+      translateV: this.transform.translateV! - 1,
+    };
+  }
+
+  private flipAfterRotate() {
+    const flippedH = this.transform.flipH;
+    const flippedV = this.transform.flipV;
+    this.transform = {
+      ...this.transform,
+      flipH: flippedV,
+      flipV: flippedH,
+      translateH: 0,
+      translateV: 0,
+    };
+  }
+
+  flipHorizontal() {
+    this.transform = {
+      ...this.transform,
+      flipH: !this.transform.flipH,
+    };
+  }
+
+  flipVertical() {
+    this.transform = {
+      ...this.transform,
+      flipV: !this.transform.flipV,
+    };
+  }
+
+  resetImage() {
+    this.canvasRotation = 0;
+    this.cropper = undefined;
+    this.maintainAspectRatio = false;
+    this.transform = {
+      translateUnit: 'px',
+      scale: 1,
+      rotate: 0,
+      flipH: false,
+      flipV: false,
+      translateH: 0,
+      translateV: 0,
+    };
+  }
+
+  zoomOut() {
+    this.transform = {
+      ...this.transform,
+      scale: this.transform.scale! - 0.4,
+    };
+  }
+
+  zoomIn() {
+    this.transform = {
+      ...this.transform,
+      scale: this.transform.scale! + 0.4,
+    };
+  }
+
+  updateRotation(rotate: number) {
+    this.transform = {
+      ...this.transform,
+      rotate,
+    };
+  }
+
+  toggleAspectRatio() {
+    this.aspectRatio = this.aspectRatio === 4 / 3 ? 16 / 5 : 4 / 3;
+  }
+
+  toggleBackgroundColor() {
+    this.backgroundColor = this.backgroundColor === 'red' ? 'blue' : 'red';
+  }
+
+  // prevent over triggering app when typing
+  debounce(event: any) {
+    clearTimeout(this.timeout);
+    (this.eventList as any)[event.target!.id] = event.target.value;
+    this.timeout = setTimeout(() => {
+      for (const [key, value] of Object.entries(this.eventList)) {
+        (this as any)[key] = Number(value);
+      }
+      this.eventList = {};
+    }, 500);
+  }
+
+  /*
+   Random Test button triggers this method
+   use it to test whatever you want
+  */
+  test() {
+    this.canvasRotation = 3;
+    this.transform = {
+      ...this.transform,
+      scale: 2,
+    };
+    this.cropper = { x1: 190, y1: 221.5, x2: 583, y2: 344.3125 }; // has 16/5 aspect ratio
+  }
 }
